@@ -10,7 +10,7 @@ use warnings;
 
 use vars qw/$VERSION/;
 
-$VERSION = 1.002;
+$VERSION = 1.003;
 
 use Carp;
 
@@ -311,7 +311,6 @@ Current version is 1.002. Beta. Use at your own risk.
   use Math::Project_3D;
   
   my $projection = Math::Project_3D->new( {
-    parameters         => 't,u',
     plane_basis_vector => [0,  0, 0],
     plane_directional1 => [.4, 1, 0],
     plane_directional2 => [.4, 0, 1],
@@ -325,13 +324,157 @@ Current version is 1.002. Beta. Use at your own risk.
   ($plane_coeff1, $plane_coeff2, $distance_coeff) =
      $projection->project( $u, $v );
 
-=head1 DESCRIPTION
+=head1 NOTE
 
 This module is beta software. That means it should work as expected
 (by the author) and as documented, but it has not been thoroughly
 enough tested in order to qualify as "stable" or "mature" code. The
 documentation is still sparse (which is why it works as documented),
 but that should be fixed real-soon-now.
+
+I'll start explaining what this module does with some background. Feel
+free to skip to L<DESCRIPTION> if you don't feel like vector geometry.
+
+=head1 BACKGROUND
+
+Given a function of three components and of an arbitrary number of
+parameters, plus a few vectors, this module creates a projection of
+individual points on this vectorial function onto an arbitrary plane
+in three dimensions.
+
+The module does this by creating lines from the result of the vectorial
+function s(a) = x,y,z and a specified projection vector (which defaults
+to the normal vector of the projection plane. The normal vector is defined
+as being orthogonal to both directional vectors of the plane or as the
+vector product of the two.). Then, using the linear equation solver of
+Math::MatrixReal, it calculates the intersection of the line and the plane.
+
+This point of intersection can be expressed as
+
+  basis point of the plane + i2 * d + i3 * e
+
+where i2/i3 are the coefficients that are the solution we got from
+solving the linear equation system and d1/d2 are the directional
+vectors of the plane. Basically, the equation system looks like this:
+
+   n1*i1 + d1*i2 + e1*i3 = p1 + x(t)
+   n2*i1 + d2*i2 + e2*i3 = p2 + y(t)
+   n3*i1 + d3*i2 + e3*i3 = p3 + z(t)
+
+where n1/2/3 are the normal vector components. p1/2/3 the basis point
+components, t is a vector of function parameters. i the solution.
+
+Now, on the plane, you can express the projected point in terms of
+the directional vectors and the calculated coefficients.
+
+=head1 DESCRIPTION
+
+=head2 Methods
+
+=over 4
+
+=item new
+
+C<new> may be used as a class or object method. In the current
+implementation both have the same effect.
+
+C<new> returns a new Math::Project_3D object. You need to pass a
+number of arguments as a list of key/value pairs:
+
+  plane_basis_vector => [0,  0, 0],
+  plane_directional1 => [.4, 1, 0],
+  plane_directional2 => [.4, 0, 1],
+  projection_vector  => [1,  1, 1], # defaults to normal of the plane
+  
+plane_basis vector denotes the position of the basis point of the plane
+you want to project onto. Vectors are generally passed as array references
+that contain the components. Another way to pass vectors would be to pass
+Math::MatrixReal objects instead of the array references.
+plane_directional1 and plane_directional2 are the vectors that span the
+plane. Hence, the projection plane has the form:
+
+  s = plane_basis_vector + coeff1 * plane_dir1 + coeff2 * plane_dir2
+
+The last vector you need to specify at creation time is the vector along
+which you want to project the function points onto the plane. You may,
+however, omit its specification because it defaults to teh cross-product
+of the plane's directional vectors. Hence, all points are orthogonally
+projected onto the plane.
+
+=item new_function
+
+This method may be used as a class or object method. It does not have
+side effects as a clas method, but as an object method, its results
+are applied to the projection object.
+
+new_function returns an anonymous subroutine compiled from component
+functions which you need to specify.
+
+For a quick synopsis, you may look at L<Math::Project_3D::Function>.
+
+You may pass a list of component functions that are included in the
+compiled vectorial functions in the order they were passed. There are
+two possible ways to specify a component function. Either you pass
+an subroutine reference which is called with the list of parameters,
+or you pass a string containing a valid Perl expression which is then
+evaluated. You may mix the two syntaxes at will.
+
+If any one of the component functions is specified as a string,
+the first argument to new_function I<must> be a string of parameter
+names separated by commas. These parameter names will then be made
+availlable to the string component functions as the respective
+scalar variables. (eg. 't,u' will mean that the parameters availlable
+to the string expressions are $t and $u.)
+
+Due to some black magic in Math::Project_3D::Function, the string
+expression syntax is actually faster at run-time because you save
+subroutine calls which are a major bottleneck in Perl.
+(Like 50 ops or so?) Arguably, the closure syntax is more powerful
+because being a closure, it has access to variables I<outside> the
+scope of the resulting vectorial function. For a simple-minded
+example, you may have a look at the synopsis in
+L<Math::Project_3D::Function>. Picture a dynamic radius, etc.
+
+=item get_function
+
+get_function returns the object's current vectorial function.
+
+=item set_function
+
+set_function is the counterpart of get_function.
+
+=item project
+
+The project method can be used to do the projection calculations for
+one point of the vectorial function. It expects a list of function
+parameters as argument.
+
+On failure (eg. the projection vector is parallel to the plane.),
+the method returns undef.
+
+On success, the method returns the coefficients of the projected
+point on the plane as well as the distance of the source point from
+the plane in lengths of the projection vector. (May be negative for
+points "behind" the plane.)
+
+=item project_list
+
+project_list is a wrapper around project and therefore rather slow
+because it is doing a lot of extra work.
+
+project_list takes a list of array references as arguments. The
+referenced arrays are to contain sets of function parameters.
+The method the calculates every set of parameters' projection and
+stores the three results (coefficients on the plane and distance
+coefficient) in an n*3 matrix (as an MMR object, n is the number of
+points projected). The matrix is returned.
+
+Currently, the method croaks if any of the points cannot be
+projected onto the plane using the given projection vector.
+The normal vector of the plane used as the projection vector should
+guarantee valid results for any points.
+
+=back
 
 =head1 AUTHOR
 

@@ -1,7 +1,7 @@
-Math::Project_3D version 1.002
+Math::Project_3D version 1.003
 ==============================
 
-INTRO
+INTRODUCTION
 
 This distribution allows the projection of points of a three dimensional
 function of an arbitrary number of parameters onto an arbitrary plane.
@@ -11,6 +11,8 @@ using some black magic and code generation for performance reasons.
 
 The module relies heavily on the Math::MatrixReal module. Without it,
 you would not see this realized.
+
+Detailed documentation can be found as pod in the module files.
 
 INSTALLATION
 
