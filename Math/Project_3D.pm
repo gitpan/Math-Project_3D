@@ -8,9 +8,11 @@ package Math::Project_3D;
 use strict;
 use warnings;
 
+use 5.006;
+
 use vars qw/$VERSION/;
 
-$VERSION = 1.003;
+$VERSION = 1.004;
 
 use Carp;
 
@@ -190,6 +192,117 @@ sub project {
 }
 
 
+# Method project_range_callback
+# 
+# Does the projection calculations for ranges of function parameters.
+# Takes an code reference and a number array refs of ranges as argument.
+# Ranges are specified using three values:
+# [lower_bound, upper_bound, increment].
+# Alternatively, one may specify only one element in any of the array
+# references. This will then be a static parameter.
+# The number of ranges (array references) corresponds to the number of
+# parameters to the vectorial function.
+# The callback is called for every set of result values with an array
+# reference of parameters and the list of the three result values.
+
+sub project_range_callback {
+   my  $self     = shift;
+
+   # Argument checking
+   my  $callback = shift;
+   ref $callback eq 'CODE' or
+     croak "Invalid code reference passed to project_range_callback.";
+
+   my @ranges    = @_;
+
+   croak "Invalid range parameters passed to project_range_callback"
+     if grep { ref $_ ne 'ARRAY' } @ranges;
+
+
+   my $function = $self->get_function();
+
+   # Replace all ranges that consist of a single number with ranges
+   # that iterate from that number to itself.
+   foreach (@ranges) {
+      $_ = [$_->[0], $_->[0], 1] if @$_ == 1;
+   }
+
+   # Calculate every range's length and store it in @lengths.
+   my @lengths   = map {
+                         #      upper  - lower    / increment
+                         int( ($_->[1] - $_->[0]) / $_->[2] ),
+                       } @ranges;
+
+   # Prepare counters for every range.
+   my @counters  = (0) x scalar(@ranges);
+
+   # Calculate the number if iterations needed.
+   # It is $_+1 and not $_ because the lengths are the lengths we
+   # need for the comparisons inside the long for loop. We save one
+   # op in there that way.
+   my $iterations = 1;
+   $iterations *= ( $_ + 1 ) for @lengths;
+   
+   # For all possible combinations of parameters...
+   for (my $i = 1; $i <= $iterations; $i++) {
+      
+      # Get current function parameters
+      my @params;
+
+      # Get one parameter for every range
+      for (my $range_no = 0; $range_no < @ranges; $range_no++) {
+         # lower + increment * current_count
+         push @params, $ranges[$range_no][0] +
+                       $ranges[$range_no][2] * $counters[$range_no];
+      }
+      
+      # Increment outermost range by one. If it got out of bounds,
+      # make it 0 and increment the next range, etc.
+      my $j = 0;
+      while (defined $ranges[$j] and ++$counters[$j] > $lengths[$j]) {
+         $counters[$j] = 0;
+         $j++;
+      }
+
+      # Apply function
+      my $point = Math::MatrixReal->new_from_cols(
+                    [
+                      [ $function->(@params) ],
+                    ]
+      );
+
+      # Generate result_vector
+      my $result_vector = Math::MatrixReal->new_from_cols(
+                            [
+                              $self->{plane_basis_vector} + $point
+                            ]
+      );
+
+      # Solve the l_e_s.
+      my ($dimension, $p_vector, undef) = $self->{lr_matrix}->solve_LR($result_vector);
+   
+      # Did we find a solution?
+      croak "Could not project $result_vector."
+        if not defined $dimension;
+
+      # $dimension == 0 => one solution
+      # $dimension == 1 => straight line
+      # $dimension == 2 => plane (impossible :) )
+      # ...
+      # $dimension == 1 is possible (point and projection_vector part
+      # of the plane). Hence: !!!FIXME!!!
+      
+      $callback->(
+             $p_vector->element(2,1), # coefficient 1
+             $p_vector->element(3,1), # coefficient 2
+             $p_vector->element(1,1), # distance in lengths of the projection vector
+      );
+   }
+   
+   return();
+}
+
+
 # Method project_list
 # 
 # Wrapper around project(), therefore slow.
@@ -312,8 +425,8 @@ Current version is 1.002. Beta. Use at your own risk.
   
   my $projection = Math::Project_3D->new( {
     plane_basis_vector => [0,  0, 0],
-    plane_directional1 => [.4, 1, 0],
-    plane_directional2 => [.4, 0, 1],
+    plane_direction1   => [.4, 1, 0],
+    plane_direction2   => [.4, 0, 1],
     projection_vector  => [1,  1, 1], # defaults to normal of the plane
   } );
 
@@ -473,6 +586,40 @@ Currently, the method croaks if any of the points cannot be
 projected onto the plane using the given projection vector.
 The normal vector of the plane used as the projection vector should
 guarantee valid results for any points.
+
+=item project_range_callback
+
+For projection of a large number of points, this method will probably
+be the best bet. Its first argument has to be a callback function that
+will be called with the calculated coefficients for every projected point.
+
+All arguments thereafter have to be array references. Every one of
+these referenced arrays represents the range of one parameter.
+These arrays may either contain one number, which is then treated as a
+static parameter, or three numbers of the form:
+
+  [ lower boundary, upper boundary, increment ]
+
+For example, [-1, 1, 0.8] would yield the parameter values
+-1, -0.2, 0.6. You may also reverse upper and lower boundary,
+given you increment by a negative value: [1, -1, -0.8] yields the
+same parameter values but in reversed order. Example:
+
+  $projection->project_range_callback(
+    sub {...}, # Do some work with the results
+    [ 1, 2,  .5],
+    [ 2, 1,  .5],
+    [ 0, 10, 4 ],
+  );
+
+Will result in the coefficients for the following parameter
+sets being calculated:
+
+1,2,0 1.5,2,0 2,2,0 1,1.5,0 1.5,1.5,0 2,1.5,0 1,1,0 1.5,1,0 2,1,0
+1,2,4 etc.
+
+croaks if a point cannot be projected. (projection vector parallel
+to the plane but not I<in> the plane.)
 
 =back
 

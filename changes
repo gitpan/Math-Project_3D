@@ -1,6 +1,11 @@
 Revision history Math::Project_3D, Math::Project_3D::Function.
 
 1.003  Thu Nov 21 15:01:47 2002
+	- Added project_range_callback method
+	- Small bugfixes
+	- Fixed Test::More dependency in Makefile.pl
+
+1.003  Thu Nov 21 15:01:47 2002
 	- Added lots of documentation. We still need a fast
 	  way of projecting a large number of points.
 	  Adding a callback version of project() is targeted

@@ -8,7 +8,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 102;
+use Test::More tests => 103;
 
 use Math::Project_3D;
 
@@ -166,6 +166,7 @@ foreach ( my $u = -1.1; $u <= 1; $u += 0.8 ) {
 
 # Get fresh test data set
 $push = 0;
+@result_set = ();
 while (<DATA>) {
    chomp;
    last if /^end set\s*$/i and $push;
@@ -200,6 +201,48 @@ foreach my $no (1..@array_refs) {
 
 ok( $correct == scalar(@array_refs),
     "Projected correctly using project_list()."
+  );
+
+
+# Now we test project_range_callback()
+
+# Get fresh test data set
+$push = 0;
+@result_set = ();
+while (<DATA>) {
+   chomp;
+   last if /^end set\s*$/i and $push;
+   push @result_set, split /\s+/ if $push;
+   $push = 1 if /^start set\s*$/i;
+}
+
+$projection = Math::Project_3D->new(
+  plane_basis_vector => [0,  0, 0],
+  plane_direction1 => [.4, 1, 0],
+  plane_direction2 => [.4, 0, 1],
+  projection_vector  => [1,  1, 1], # defaults to normal of the plane
+);
+
+$projection->new_function(
+   't,u,v,w,x,y,z', '$t+$x+$w', '$u+$y', '$v+$z',
+);
+
+my $sad = 0;
+my $okay = 0;
+$projection->project_range_callback(
+   sub { $sad++; $okay++ unless grep {$_ == shift @result_set} @_ },
+   [0, 5, 2.5],
+   [-1,1, .69],
+   [-1,-1,-1],
+   [0,0,-10000],
+   [4, 0, -1],
+   [1],
+   [-1],
+);
+
+ok(
+    $okay == 45,
+    "Projected correctly using project_range_callback ($okay okay of 45)"
   );
 
 
@@ -245,4 +288,53 @@ start set
 -72724.8484848485 527275.151515151 -181812.121212121
 -12117.9090909091 87881.0909090909 -30297.2727272727
 -72723.9696969697 527275.03030303 -181812.424242424
+end set
+
+This is for the test of the project_range_callback() method
+start set
+-24 -26 24
+-36.5 -38.5 36.5
+-49 -51 49
+-21.93 -24.62 22.62
+-34.43 -37.12 35.12
+-46.93 -49.62 47.62
+-19.86 -23.24 21.24
+-32.36 -35.74 33.74
+-44.86 -48.24 46.24
+-19 -21 19
+-31.5 -33.5 31.5
+-44 -46 44
+-16.93 -19.62 17.62
+-29.43 -32.12 30.12
+-41.93 -44.62 42.62
+-14.86 -18.24 16.24
+-27.36 -30.74 28.74
+-39.86 -43.24 41.24
+-14 -16 14
+-26.5 -28.5 26.5
+-39 -41 39
+-11.93 -14.62 12.62
+-24.43 -27.12 25.12
+-36.93 -39.62 37.62
+-9.86 -13.24 11.24
+-22.36 -25.74 23.74
+-34.86 -38.24 36.24
+-9 -11 9
+-21.5 -23.5 21.5
+-34 -36 34
+-6.93 -9.62 7.62
+-19.43 -22.12 20.12
+-31.93 -34.62 32.62
+-4.86 -8.24 6.24
+-17.36 -20.74 18.74
+-29.86 -33.24 31.24
+-4 -6 4
+-16.5 -18.5 16.5
+-29 -31 29
+-1.93 -4.62 2.62
+-14.43 -17.12 15.12
+-26.93 -29.62 27.62
+0.139999999999999 -3.24 1.24
+-12.36 -15.74 13.74
+-24.86 -28.24 26.24
 end set
